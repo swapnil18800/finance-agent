@@ -64,7 +64,7 @@ REDIS_TIMEOUT = settings.REDIS.TIMEOUT
 def log_stage_header(stage_num: int, emoji: str, title: str):
     """Helper function to log stage headers consistently"""
     log_info("\n" + "="*60)
-    log_info(f"{emoji} STAGE {stage_num}: {title}")
+    log_info(f"STAGE {stage_num}: {title}")
     log_info("="*60)
 
 
@@ -297,56 +297,24 @@ async def initialize_database():
             log_info("⚠️ Comprehensive logging not available - using console-only logging")
             
     except Exception as e:
-        log_info(f"❌ Database initialization failed: {e}")
+        err_str = str(e)
+        log_info(f"❌ Database initialization failed: {err_str}")
+        if "getaddrinfo failed" in err_str or "Name or service not known" in err_str:
+            log_info("🔴 DNS resolution failed — your Supabase project is likely PAUSED.")
+            log_info("   👉 Go to https://supabase.com/dashboard → select your project → click 'Resume'")
+            log_info("   👉 Free tier projects pause after 1 week of inactivity.")
         log_info("⚠️  App will start but database features won't work")
-        log_info("💡 Add a PostgreSQL plugin in Railway or set DATABASE_URL variable")
+        log_info("💡 Resume Supabase project or set a valid DATABASE_URL variable")
 
 
 async def initialize_analyzer_and_rag():
-    """Initialize Financial Analyzer and RAG systems"""
+    """Initialize Financial Analyzer and RAG systems (lazy initialization in routers)"""
     global analyzer_instance
-    
-    # Initialize analyzer (if available)
-    log_info("🔍 Checking analyzer availability...")
-    log_info(f"   ANALYZER_AVAILABLE: {ANALYZER_AVAILABLE}")
-    log_info(f"   FinancialDataAnalyzer: {FinancialDataAnalyzer is not None}")
-    
-    if ANALYZER_AVAILABLE and FinancialDataAnalyzer:
-        log_info("🤖 Initializing Financial Data Analyzer with PostgreSQL...")
-        import time
-        start_time = time.time()
-        
-        try:
-            log_info("🔌 Creating FinancialDataAnalyzer instance...")
-            analyzer_instance = FinancialDataAnalyzer(
-                default_page_size=settings.DATABASE.DEFAULT_PAGE_SIZE
-            )
-            end_time = time.time()
-            log_info(f"✅ Analyzer initialized successfully in {end_time - start_time:.2f} seconds.")
-            
-        except Exception as e:
-            log_info(f"❌ Failed to initialize analyzer: {e}")
-            log_info(f"🔍 Error type: {type(e).__name__}")
-            traceback.print_exc()
-            analyzer_instance = None
-    else:
-        log_info("⚠️  Analyzer not available - running in auth-only mode")
-        log_info(f"   ANALYZER_AVAILABLE: {ANALYZER_AVAILABLE}")
-        log_info(f"   FinancialDataAnalyzer: {FinancialDataAnalyzer}")
-        analyzer_instance = None
-    
-    # Initialize RAG system (if available)
-    log_info("🤖 Checking RAG system availability...")
-    try:
-        from agent import Agent as RAGSystem
-        RAG_AVAILABLE = True
-        log_info(f"   RAG_AVAILABLE: {RAG_AVAILABLE}")
-    except ImportError:
-        RAG_AVAILABLE = False
-        log_info(f"   RAG_AVAILABLE: {RAG_AVAILABLE}")
-    
-    # RAG system is now initialized in the chat router
-    log_info("ℹ️ RAG system will be initialized by chat router when needed")
+
+    # Skip expensive initialization at startup
+    log_info("⏭️  Analyzer & RAG: Skipping startup init (will load on-demand in routers)")
+    analyzer_instance = None
+    log_info("✅ Analyzer & RAG setup skipped - will initialize when first needed")
 
 
 async def setup_authentication_and_routing():

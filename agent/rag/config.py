@@ -22,8 +22,8 @@ class AnswerMode(str, Enum):
 
 
 ANSWER_MODE_CONFIG = {
-    AnswerMode.DIRECT:      {"max_iterations": 2, "max_tokens": 2000, "confidence_threshold": 0.7},
-    AnswerMode.STANDARD:    {"max_iterations": 3, "max_tokens": 6000, "confidence_threshold": 0.8},
+    AnswerMode.DIRECT:      {"max_iterations": 2, "max_tokens": 6000, "confidence_threshold": 0.7},
+    AnswerMode.STANDARD:    {"max_iterations": 3, "max_tokens": 8000, "confidence_threshold": 0.8},
     AnswerMode.DETAILED:    {"max_iterations": 4, "max_tokens": 16000, "confidence_threshold": 0.9},
     AnswerMode.DEEP_SEARCH: {"max_iterations": 10, "max_tokens": 20000, "confidence_threshold": 0.95},
 }
@@ -59,7 +59,7 @@ class Config:
             },
             
             # OpenAI settings (response generation)
-            "openai_model": "gpt-5-nano-2025-08-07",  # OpenAI for response generation
+            "openai_model": "gpt-4o-mini",  # OpenAI for response generation
             "openai_max_tokens": int(os.getenv("RAG_OPENAI_MAX_TOKENS", "8000")),  # max_completion_tokens; lower = faster
             "openai_temperature": 1,
             

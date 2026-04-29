@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ExternalLink } from 'lucide-react'
 import { useEffect } from 'react'
-import StrataLensLogo from './StrataLensLogo'
+import AppLogo from './AppLogo'
 
 interface AboutModalProps {
   isOpen: boolean
@@ -52,9 +52,9 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#0a1628] rounded-xl flex items-center justify-center shadow-sm">
-                  <StrataLensLogo size={20} className="text-white" />
+                  <AppLogo size={20} className="text-white" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-900">About StrataLens</h2>
+                <h2 className="text-xl font-bold text-slate-900">About AlphaLens</h2>
               </div>
               <button
                 onClick={onClose}
@@ -72,23 +72,23 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
 
               <div className="mb-6">
                 <p className="text-sm text-slate-500 mb-1">Created by</p>
-                <p className="text-lg font-semibold text-slate-900">Hrishikesh Kamath</p>
+                <p className="text-lg font-semibold text-slate-900">Swapnil Padhi</p>
               </div>
 
               <a
-                href="https://kamathhrishi.github.io"
+                href="https://www.linkedin.com/in/swapnilpadhi/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-[#0a1628] hover:text-[#1e293b] font-medium transition-colors mb-6"
               >
-                Visit kamathhrishi.github.io
+                Visit my LinkedIn
                 <ExternalLink className="w-4 h-4" />
               </a>
 
               <div className="p-4 bg-slate-50 rounded-xl">
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  I spent several months building StrataLens as a product, learning extensively about the financial industry and working with analysts. While I've decided to open source it rather than continue commercial development, it was an incredibly valuable journey. Feel free to use and contribute!
-                </p>
+                Built as a full-stack agentic AI system for equity research, combining RAG, pgvector-based semantic search, and real-time financial data APIs to help analysts explore SEC filings and earnings calls faster. Stack: FastAPI, LangGraph, React, PostgreSQL
+                 </p>
               </div>
             </div>
 

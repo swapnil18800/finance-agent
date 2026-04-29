@@ -20,16 +20,30 @@ from app.auth.auth_utils import get_current_user, get_optional_user
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# ── S3 bucket client ──────────────────────────────────────────────────────────
-_s3 = boto3.client(
-    "s3",
-    endpoint_url=os.getenv("RAILWAY_BUCKET_ENDPOINT", "").strip(),
-    aws_access_key_id=os.getenv("RAILWAY_BUCKET_ACCESS_KEY_ID", "").strip(),
-    aws_secret_access_key=os.getenv("RAILWAY_BUCKET_SECRET_KEY", "").strip(),
-    region_name="auto",
-    config=Config(signature_version="s3v4"),
-)
+# ── S3 bucket client (lazy-loaded) ────────────────────────────────────────────
+_s3 = None
 _BUCKET_NAME = os.getenv("RAILWAY_BUCKET_NAME", "").strip()
+
+def _get_s3_client():
+    """Lazy-load S3 client only when needed"""
+    global _s3
+    if _s3 is None:
+        endpoint_url = os.getenv("RAILWAY_BUCKET_ENDPOINT", "").strip()
+        access_key = os.getenv("RAILWAY_BUCKET_ACCESS_KEY_ID", "").strip()
+        secret_key = os.getenv("RAILWAY_BUCKET_SECRET_KEY", "").strip()
+
+        if not endpoint_url or not access_key or not secret_key:
+            raise HTTPException(status_code=503, detail="Railway S3 bucket not configured")
+
+        _s3 = boto3.client(
+            "s3",
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name="auto",
+            config=Config(signature_version="s3v4"),
+        )
+    return _s3
 
 # ── DB pool (PG_VECTOR) ───────────────────────────────────────────────────────
 _pg_url = os.getenv("PG_VECTOR", "").strip()
@@ -38,7 +52,17 @@ _pool: asyncpg.Pool | None = None
 async def _get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(_pg_url, min_size=2, max_size=5)
+        url = _pg_url
+        pool_kwargs: dict = dict(min_size=1, max_size=4)
+        if "supabase.co" in url or "supabase.com" in url:
+            import ssl as _ssl
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            pool_kwargs["ssl"] = ctx
+            if "sslmode=" not in url:
+                url = url + ("&" if "?" in url else "?") + "sslmode=require"
+        _pool = await asyncpg.create_pool(url, **pool_kwargs)
     return _pool
 
 # ── In-memory cache for transcript text ──────────────────────────────────────
@@ -52,7 +76,7 @@ async def _fetch_transcript_from_bucket(bucket_key: str) -> str:
     loop = asyncio.get_event_loop()
     response = await loop.run_in_executor(
         None,
-        lambda: _s3.get_object(Bucket=_BUCKET_NAME, Key=bucket_key)
+        lambda: _get_s3_client().get_object(Bucket=_BUCKET_NAME, Key=bucket_key)
     )
     text = response["Body"].read().decode("utf-8")
     if len(_transcript_cache) >= _MAX_CACHE:

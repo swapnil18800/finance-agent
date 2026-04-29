@@ -90,29 +90,35 @@ class RateLimiter:
             "monthly_limit": ADMIN_RATE_LIMIT_PER_MONTH if is_admin else RATE_LIMIT_PER_MONTH
         }
     
-    async def check_rate_limit_with_monthly(self, user_id: str, is_admin: bool, db: asyncpg.Connection) -> Tuple[bool, Dict[str, Any]]:
-        """Check both minute and monthly rate limits together"""
+    async def check_rate_limit_with_monthly(self, user_id: str, is_admin: bool, db) -> Tuple[bool, Dict[str, Any]]:
+        """Check both minute and monthly rate limits together.
+
+        db may be None when the database pool is unavailable; in that case only
+        the in-memory minute/monthly counters are used.
+        """
         # First check minute limit
         minute_allowed, minute_info = self.check_rate_limit(user_id, is_admin)
-        
+
         if not minute_allowed:
             return False, minute_info
-        
+
         # Now check monthly limit from database
         today = date.today()
         month_start = today.replace(day=1)
         monthly_limit = ADMIN_RATE_LIMIT_PER_MONTH if is_admin else RATE_LIMIT_PER_MONTH
-        
+
         # FIXED: Clean up old monthly requests first
         self._cleanup_old_requests(user_id)
-        
-        # Get monthly count from database
-        monthly_count_db = await db.fetchval('''
-            SELECT COALESCE(SUM(request_count), 0) 
-            FROM user_usage 
-            WHERE user_id = $1 AND request_date >= $2
-        ''', uuid.UUID(user_id), month_start)
-        
+
+        # Get monthly count from database (skip if DB unavailable)
+        monthly_count_db = 0
+        if db is not None:
+            monthly_count_db = await db.fetchval('''
+                SELECT COALESCE(SUM(request_count), 0)
+                FROM user_usage
+                WHERE user_id = $1 AND request_date >= $2
+            ''', uuid.UUID(user_id), month_start)
+
         # FIXED: Get in-memory monthly count (for pending requests)
         monthly_count_memory = len(self.monthly_requests[user_id])
         

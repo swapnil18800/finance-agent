@@ -17,38 +17,50 @@ async def setup_connection(connection):
     await connection.execute(f"SET idle_in_transaction_session_timeout = {settings.DATABASE.IDLE_IN_TRANSACTION_TIMEOUT_MS}")
 
 
+def _is_supabase_url(url: str) -> bool:
+    return "supabase.co" in url or "supabase.com" in url
+
+
 async def init_database(database_url: str, db_pool: Optional[asyncpg.Pool] = None) -> asyncpg.Pool:
     """
     Initialize PostgreSQL database tables and return the database pool
-    
+
     Args:
         database_url: PostgreSQL connection string
         db_pool: Optional existing database pool (if None, will create new one)
-    
+
     Returns:
         asyncpg.Pool: The initialized database pool
     """
-    # Get database pool configuration from centralized settings
-    pool_config = get_database_pool_config()
-    min_size = pool_config['min_size']
-    max_size = pool_config['max_size']
-    command_timeout = pool_config['command_timeout']
-    timeout = pool_config['timeout']
-    
     if settings.ENVIRONMENT.is_production:
         log_info("🏭 Production environment detected - using stricter connection limits")
+        min_size = settings.DATABASE.CONNECTION_POOL.PRODUCTION_MIN_SIZE
+        max_size = settings.DATABASE.CONNECTION_POOL.PRODUCTION_MAX_SIZE
+        command_timeout = settings.DATABASE.CONNECTION_POOL.PRODUCTION_COMMAND_TIMEOUT
+        timeout = settings.DATABASE.CONNECTION_POOL.PRODUCTION_TIMEOUT
     else:
-        log_info("🏠 Development environment detected - using increased connection limits to prevent conflicts")
-    
+        log_info("🏠 Development environment detected - using conservative connection limits for Supabase free tier")
+        # Supabase free tier allows ~10 connections total; keep pool small
+        min_size = 1
+        max_size = 4
+        command_timeout = 30
+        timeout = 20
+
+    # Supabase requires SSL; add it if not already in the URL
+    ssl_param = None
+    if _is_supabase_url(database_url):
+        log_info("🔒 Supabase URL detected — enabling SSL (require mode)")
+        ssl_param = "require"
+        if "sslmode=" not in database_url:
+            database_url = database_url + ("&" if "?" in database_url else "?") + "sslmode=require"
+
     # Create database pool if not provided
     if db_pool is None:
-        db_pool = await asyncpg.create_pool(
-            database_url, 
+        pool_kwargs = dict(
             min_size=min_size,
             max_size=max_size,
             command_timeout=command_timeout,
             timeout=timeout,
-            # Improved connection pool settings to prevent concurrent access issues
             setup=setup_connection,
             server_settings={
                 'application_name': settings.DATABASE.APPLICATION_NAME,
@@ -57,6 +69,14 @@ async def init_database(database_url: str, db_pool: Optional[asyncpg.Pool] = Non
                 'tcp_keepalives_count': str(settings.DATABASE.TCP_KEEPALIVES_COUNT)
             }
         )
+        if ssl_param:
+            import ssl as _ssl
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            pool_kwargs['ssl'] = ctx
+
+        db_pool = await asyncpg.create_pool(database_url, **pool_kwargs)
     
     log_info(f"🔧 Database pool created: min_size={min_size}, max_size={max_size}")
     

@@ -53,7 +53,7 @@ class QuestionAnalyzer:
         # Reasoning stage always uses GPT-5-nano for context-aware question analysis
         from agent.llm.openai_client import OpenAILLMClient
         api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-        self.llm = OpenAILLMClient(api_key=api_key, default_model="gpt-5-nano-2025-08-07")
+        self.llm = OpenAILLMClient(api_key=api_key, default_model="gpt-4o-mini")
         logger.info("✅ QuestionAnalyzer initialized with GPT-5-nano (reasoning stage)")
 
         # Sliding window: last 5 exchanges, 4000 chars per message
@@ -419,7 +419,7 @@ Example: {{"is_valid": true, "reason": "Valid question", "question_type": "speci
                     )
                 
                 start_time = time.time()
-                model = "gpt-5-nano-2025-08-07"
+                model = "gpt-4o-mini"
                 rag_logger.info(f"🤖 Sending question to LLM ({self.llm.provider_name}) model: {model} (attempt {attempt + 1}/{max_retries})")
 
                 if LOGFIRE_AVAILABLE and logfire:

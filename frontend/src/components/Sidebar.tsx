@@ -16,7 +16,7 @@ import {
   Plus,
   Clock,
 } from 'lucide-react'
-import StrataLensLogo from './StrataLensLogo'
+import AppLogo from './AppLogo'
 import AboutModal from './AboutModal'
 import type { Conversation } from '../lib/api'
 
@@ -118,10 +118,10 @@ export default function Sidebar({
       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'} p-4 border-b border-slate-200`}>
         <Link to="/" className="flex items-center gap-2.5 group">
           <div className="w-9 h-9 bg-[#0a1628] rounded-lg flex items-center justify-center">
-            <StrataLensLogo size={18} className="text-white" />
+            <AppLogo size={18} className="text-white" />
           </div>
           {!isCollapsed && (
-            <span className="text-lg font-semibold text-[#0a1628] tracking-tight">StrataLens</span>
+            <span className="text-lg font-semibold text-[#0a1628] tracking-tight">AlphaLens</span>
           )}
         </Link>
       </div>

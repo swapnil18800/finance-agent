@@ -6,7 +6,11 @@ Handles observability setup with environment-based configuration
 import os
 import logging
 from typing import Optional
-import logfire
+
+try:
+    import logfire
+except ImportError:
+    logfire = None
 
 logger = logging.getLogger(__name__)
 
@@ -17,19 +21,23 @@ def configure_logfire(
 ) -> bool:
     """
     Configure Logfire for observability.
-    
+
     Args:
         service_name: Name of the service (default: stratalens-ai)
         environment: Environment name (default: from ENVIRONMENT env var or 'production')
-    
+
     Returns:
         bool: True if Logfire was configured successfully, False otherwise
-    
+
     Environment Variables:
         LOGFIRE_TOKEN: Write token from logfire.pydantic.dev (required)
         ENVIRONMENT: Environment name (optional, default: production)
         LOGFIRE_ENABLED: Set to 'false' to disable Logfire (optional)
     """
+    if logfire is None:
+        logger.warning("⚠️ Logfire not installed - observability disabled")
+        return False
+
     # Check if Logfire should be enabled
     logfire_enabled = os.getenv("LOGFIRE_ENABLED", "true").lower() == "true"
     if not logfire_enabled:
@@ -81,6 +89,10 @@ def instrument_all():
     IMPORTANT: For OpenAI instrumentation to capture prompts/completions,
     this must be called BEFORE any OpenAI client is instantiated.
     """
+    if logfire is None:
+        logger.warning("⚠️ Logfire not available - skipping instrumentation")
+        return
+
     # Enable capturing of message content (prompts/completions) for GenAI instrumentation
     # This is REQUIRED for OpenAI prompts to show in Logfire
     os.environ.setdefault("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "true")

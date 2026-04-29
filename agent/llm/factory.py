@@ -65,7 +65,7 @@ def get_llm(
     resolved = (resolved or "auto").strip().lower()
 
     # Model overrides by role
-    openai_model = _config_get(config, "openai_model") or os.getenv("RAG_OPENAI_MODEL", "gpt-5-nano-2025-08-07")
+    openai_model = _config_get(config, "openai_model") or os.getenv("RAG_OPENAI_MODEL", "gpt-4o-mini")
     cerebras_model = _config_get(config, "cerebras_model") or os.getenv("RAG_CEREBRAS_MODEL", "qwen-3-235b-a22b-instruct-2507")
     if role == "evaluation":
         openai_model = _config_get(config, "evaluation_model") or openai_model

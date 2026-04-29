@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect, useRef } from 'react'
-import StrataLensLogo from '../components/StrataLensLogo'
+import AppLogo from '../components/AppLogo'
 import AboutModal from '../components/AboutModal'
 import { Check, X, Shield, Globe, Send, ArrowRight, ChevronRight, FileText, MessageSquare, Sparkles, BookOpen, Clock } from 'lucide-react'
 
@@ -158,13 +158,13 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
           <a href="/" className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 bg-[#0a1628] rounded-lg flex items-center justify-center">
-              <StrataLensLogo size={17} className="text-white" />
+              <AppLogo size={17} className="text-white" />
             </div>
-            <span className="text-lg font-semibold text-[#0a1628] tracking-tight">StrataLens</span>
+            <span className="text-lg font-semibold text-[#0a1628] tracking-tight">AlphaLens</span>
           </a>
           <div className="hidden md:flex items-center gap-6">
             <a href="#features" className="text-slate-500 text-sm font-medium hover:text-[#0a1628] transition-colors px-2 py-1">Features</a>
-            <a href="#why" className="text-slate-500 text-sm font-medium hover:text-[#0a1628] transition-colors px-2 py-1">Why StrataLens</a>
+            <a href="#why" className="text-slate-500 text-sm font-medium hover:text-[#0a1628] transition-colors px-2 py-1">Why AlphaLens</a>
             <button
               onClick={() => setAboutOpen(true)}
               className="text-slate-500 text-sm font-medium hover:text-[#0a1628] transition-colors px-2 py-1"
@@ -627,7 +627,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Why StrataLens Section */}
+      {/* Why AlphaLens Section */}
       <section id="why" className="py-24 bg-white relative">
         <div className="max-w-5xl mx-auto px-6 relative z-10">
           <motion.div
@@ -648,7 +648,7 @@ export default function LandingPage() {
           </motion.div>
 
           <div className="grid md:grid-cols-2 gap-6">
-            {/* StrataLens Card */}
+            {/* AlphaLens Card */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -660,7 +660,7 @@ export default function LandingPage() {
                   <Shield className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-[#0a1628]">StrataLens</h3>
+                  <h3 className="text-xl font-semibold text-[#0a1628]">AlphaLens</h3>
                   <p className="text-sm text-slate-500">Primary Sources</p>
                 </div>
               </div>
@@ -757,9 +757,9 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
-                <StrataLensLogo size={14} className="text-white" />
+                <AppLogo size={14} className="text-white" />
               </div>
-              <span className="text-base font-medium text-white">StrataLens</span>
+              <span className="text-base font-medium text-white">AlphaLens</span>
             </div>
             <p className="text-sm text-slate-500">
               Institutional-grade market intelligence platform

@@ -11,36 +11,69 @@ from app.auth import auth
 from app.auth import router as auth_router
 from app.auth.auth_utils import get_db
 from config import get_cors_origins, settings
-from app.routers.charting import router as charting_router
 from app.routers.chat import router as chat_router
-from app.routers.companies import router as companies_router
-from app.routers.companies_financials import router as companies_financials_router
-from app.routers.screens import router as screens_router
-from app.routers.screener import router as screener_router
-from app.routers.sec_filings import router as sec_filings_router
-from app.routers.transcript import router as transcript_router
 from app.routers.users import router as users_router
+
 from app.websocket.routes import websocket_endpoint
 
 
 def setup_routes(app: FastAPI):
     """Configure all routes for the FastAPI application"""
-    
+
     # Setup authentication dependency
     auth.set_db_dependency(get_db)
-    
-    # Include API routers
+
+    # Include API routers (always available)
     app.include_router(auth_router)
-    app.include_router(screens_router)
-    app.include_router(charting_router)
-    app.include_router(companies_router)
-    app.include_router(companies_financials_router)
     app.include_router(chat_router, prefix="/chat")
-    app.include_router(screener_router)
-    app.include_router(sec_filings_router)
-    app.include_router(transcript_router)
     app.include_router(users_router)
-    
+
+    # Lazy-load optional routers (import on first use)
+    def load_optional_routers():
+        try:
+            from app.routers.screens import router as screens_router
+            app.include_router(screens_router, prefix="/screens")
+        except ImportError:
+            pass
+
+        try:
+            from app.routers.charting import router as charting_router
+            app.include_router(charting_router, prefix="/charting")
+        except ImportError:
+            pass
+
+        try:
+            from app.routers.companies import router as companies_router
+            app.include_router(companies_router, prefix="/companies")
+        except ImportError:
+            pass
+
+        try:
+            from app.routers.companies_financials import router as companies_financials_router
+            app.include_router(companies_financials_router, prefix="/companies")
+        except ImportError:
+            pass
+
+        try:
+            from app.routers.screener import router as screener_router
+            app.include_router(screener_router, prefix="/screener")
+        except ImportError:
+            pass
+
+        try:
+            from app.routers.sec_filings import router as sec_filings_router
+            app.include_router(sec_filings_router, prefix="/sec-filings")
+        except ImportError:
+            pass
+
+        try:
+            from app.routers.transcript import router as transcript_router
+            app.include_router(transcript_router, prefix="/transcripts")
+        except ImportError:
+            pass
+
+    load_optional_routers()
+
     # WebSocket route
     app.websocket("/ws/{user_id}")(websocket_endpoint)
     

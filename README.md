@@ -1,255 +1,243 @@
 # Finance Agent
 
-Finance agent is an equity research platform. Ask questions and get answers from 10-K filings, earnings calls, and news.
+A GenAI-powered equity research platform. Ask questions and get answers grounded in 10-K filings and quarterly financials for S&P 500 tech companies.
 
-**Live Platform:** [www.stratalens.ai](https://www.stratalens.ai)
-
-**10K filings agent blogpost:** [Blogpost](https://substack.com/home/post/p-181608263)
-
-## Agent System
-
-Core agent system implementing **Retrieval-Augmented Generation (RAG)** with **semantic data source routing**, **research planning**, and **iterative self-improvement** for financial Q&A.
-
-### Architecture Overview
-
-```
-                              AGENT PIPELINE
- ═══════════════════════════════════════════════════════════════════════
-
- ┌──────────┐    ┌───────────────────┐    ┌──────────────────────────┐
- │ Question │───►│ Question Analyzer │───►│  Semantic Data Routing   │
- └──────────┘    │  (LLM via config) │    │                          │
-                 │                   │    │  • Earnings Transcripts  │
-                 │ Extracts:         │    │  • SEC 10-K Filings      │
-                 │ • Tickers         │    │  • Real-Time News        │
-                 │ • Time periods    │    │  • Hybrid (multi-source) │
-                 │ • Intent          │    └────────────┬─────────────┘
-                 └───────────────────┘                 │
-                                                       ▼
-                 ┌─────────────────────────────────────────────────────┐
-                 │              RESEARCH PLANNING                       │
-                 │  Agent generates reasoning: "I need to find..."     │
-                 └────────────────────────┬────────────────────────────┘
-                                          ▼
-                 ┌─────────────────────────────────────────────────────┐
-                 │                  RETRIEVAL LAYER                     │
-                 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │
-                 │  │  Earnings   │  │  SEC 10-K   │  │   Tavily    │  │
-                 │  │ Transcripts │  │  Retrieval  │  │    News     │  │
-                 │  │             │  │   Agent     │  │             │  │
-                 │  │ Vector DB   │  │ (10-K only) │  │  Live API   │  │
-                 │  │ + Hybrid    │  │ Planning +  │  │             │  │
-                 │  │   Search    │  │  Iterative  │  │             │  │
-                 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  │
-                 └─────────┴───────────┬────┴────────────────┴─────────┘
-                                       │ ▲
-                                       │ │ Re-query with
-                                       │ │ follow-up questions
-                                       ▼ │
-                 ┌─────────────────────────────────────────────────────┐
-                 │               ITERATIVE IMPROVEMENT                  │
-                 │                                                      │
-                 │    ┌──────────┐    ┌──────────┐    ┌──────────┐     │
-                 │    │ Generate │───►│ Evaluate │───►│ Iterate? │─────┼───┐
-                 │    │  Answer  │    │ Quality  │    │          │     │   │
-                 │    └──────────┘    └──────────┘    └──────────┘     │   │
-                 │                                         │ NO        │   │ YES
-                 └─────────────────────────────────────────┼───────────┘   │
-                                                           ▼               │
-                                                    ┌─────────────┐        │
-                                                    │   ANSWER    │        │
-                                                    │ + Citations │        │
-                                                    └─────────────┘        │
-                                                           ▲               │
-                                                           └───────────────┘
-```
-
-**Key Concepts:**
-1. **Semantic Routing** - Routes to data sources based on question **intent**, not keywords
-2. **Research Planning** - Agent explains reasoning before searching ("I need to find...")
-3. **Multi-Source RAG** - Combines earnings transcripts, SEC 10-K filings, and news
-4. **Self-Reflection** - Evaluates answer quality and iterates until confident
-5. **Answer Modes** - Configurable iteration depth (2-10 iterations) and quality thresholds (70-95%)
-6. **Search-Optimized Follow-ups** - Generates keyword phrases for better RAG retrieval
-7. **Parallel Multi-Agent Synthesis** - Per-ticker subagents run in parallel; results are synthesized into one unified answer
-
-**Benchmark:** 91% accuracy on [FinanceBench](https://github.com/patronus-ai/financebench) (112 10-K questions), ~10s per question, evaluated using LLM-as-a-judge.
-
-### Documentation
-
-| Document | Description |
-|----------|-------------|
-| **[agent/README.md](agent/README.md)** | Complete agent architecture, pipeline stages, configuration |
-| **[docs/SEC_AGENT.md](docs/SEC_AGENT.md)** | SEC 10-K agent: section routing, table selection, reranking |
-| **[agent/rag/data_ingestion/README.md](agent/rag/data_ingestion/README.md)** | Data ingestion pipelines for transcripts and 10-K filings |
+**Stack:** FastAPI · PostgreSQL (pgvector) · Cerebras Qwen-3-235B · React · Railway
 
 ---
 
-## Features
+## What It Does
 
-- **Earnings Transcripts** (2020-2025) - Word-for-word executive commentary from earnings calls
-- **SEC 10-K Filings** (2018-2025) - Official annual reports via specialized retrieval agent (10-Q/8-K coming soon)
-- **Real-Time News** - Latest market developments via Tavily search
-- **Financial Screener** - Natural language queries over company fundamentals [in development]
+- **RAG over 10-K filings** — 42,023 chunks from 27 tickers (AAPL, NVDA, MSFT, META, etc.)
+- **Quarterly financial summaries** — 140 chunks across 28 tickers via yfinance
+- **Hybrid search** — BM25 + pgvector cosine similarity + cross-encoder rerank
+- **Streaming responses** — SSE via FastAPI, real-time to the browser
+- **Multi-company comparisons** — single question, parallel per-ticker retrieval
+- **Auth** — Clerk JWT in production, dev fallback via `X-User-ID` header
 
-Unlike generic LLMs that rely on web content, Finance Agent uses the same authoritative documents that professional analysts depend on.
+---
 
-## Tech Stack
+## Agent Architecture
 
-- **Backend:** FastAPI, PostgreSQL (pgvector), DuckDB
-- **AI/ML:** Cerebras (Qwen-3-235B), OpenAI (fallback), RAG with iterative self-improvement
-- **Search:** Hybrid vector (pgvector) + TF-IDF with cross-encoder reranking
-- **Frontend:** React + TypeScript, Tailwind CSS
+```
+Question
+  ↓
+Question Analyzer          (extracts ticker, intent, time period)
+  ↓
+Search Planner             (generates keyword + vector queries per ticker)
+  ↓
+Hybrid Retrieval
+  ├── ten_k_chunks         (42,023 rows — pgvector + BM25)
+  └── transcript_chunks    (140 rows   — pgvector + BM25)
+  ↓
+Cross-Encoder Rerank       (sentence-transformers)
+  ↓
+LLM Generation             (Cerebras Qwen-3-235B → OpenAI gpt-4o-mini fallback)
+  ↓
+Streaming SSE Response
+```
+
+---
 
 ## Project Structure
 
 ```
-finance_agent/
-├── agent/                  # AI agent & RAG system         → see agent/README.md
-│   ├── __init__.py        # Public API: Agent, RAGAgent, create_agent()
-│   ├── agent_config.py    # Iteration/quality threshold settings
-│   ├── prompts.py         # Centralized LLM prompt templates
-│   ├── llm/               # Unified LLM client (OpenAI/Cerebras)  → see agent/llm/README.md
-│   ├── rag/               # RAG implementation
-│   │   ├── rag_agent.py                          # Main orchestration
-│   │   ├── sec_filings_service_smart_parallel.py  # SEC 10-K agent
-│   │   ├── response_generator.py   # LLM response & evaluation
-│   │   ├── question_analyzer.py    # Semantic routing
-│   │   ├── search_engine.py        # Hybrid transcript search
-│   │   ├── tavily_service.py       # Real-time news
-│   │   ├── earnings_transcript_service.py  # Dedicated earnings transcript retrieval agent
-│   │   ├── search_planner.py       # Search plan generation and temporal reference resolution
-│   │   ├── rag_flow_context.py     # Flow context dataclass for pipeline state
-│   │   └── data_ingestion/         # Data pipeline → see data_ingestion/README.md
-│   └── screener/          # Financial screener
-├── app/                   # FastAPI application
-│   ├── routers/           # API endpoints
-│   └── schemas/           # Pydantic models
-├── frontend/              # React + TypeScript frontend
-├── docs/                  # Documentation
-│   └── SEC_AGENT.md       # 10-K agent deep dive
+finance-agent/
+├── app/                        # FastAPI application
+│   ├── main.py                 # Server entry point
+│   ├── routers/                # chat, companies, sec_filings, transcripts
+│   ├── auth/                   # Clerk JWT + dev fallback
+│   ├── schemas/                # Pydantic request/response models
+│   └── utils/                  # Logging, DB init, error handlers
+├── agent/                      # RAG pipeline
+│   ├── rag/
+│   │   ├── rag_agent.py        # Main orchestration
+│   │   ├── question_analyzer.py
+│   │   ├── search_planner.py
+│   │   ├── search_engine.py    # Hybrid BM25 + pgvector
+│   │   ├── response_generator.py
+│   │   ├── tavily_service.py   # Real-time news (optional)
+│   │   └── data_ingestion/     # Ingestion scripts (10-K + transcripts)
+│   └── screener/               # Financial screener (DuckDB, in development)
+├── frontend/                   # React + Vite + TypeScript
+├── tests/                      # Test suite (split by component)
+│   ├── run_all.py              # Orchestrator
+│   ├── test_health.py
+│   ├── test_companies.py
+│   ├── test_conversations.py
+│   ├── test_sec_filings.py
+│   ├── test_transcripts.py
+│   ├── test_db_coverage.py
+│   ├── test_chat_rag.py        # Slow — hits LLM
+│   └── utils.py                # Shared helpers
+├── data/
+│   ├── raw/
+│   │   ├── sec_edgar/          # EDGAR .tar archives (gitignored, re-downloadable)
+│   │   └── earnings_transcripts/
+│   └── processed/              # Local embedding cache (gitignored)
+├── docs/                       # Project documentation
+├── scripts/                    # Utility scripts
+├── logs/                       # Application + ingestion logs (gitignored)
+├── db/                         # SQL schema
+├── config.py                   # Settings (reads from .env)
+├── requirements.txt
+└── test_apis.py                # Backward-compat shim → tests/run_all.py
 ```
+
+---
 
 ## Quick Start
 
 ### Prerequisites
-- Python 3.9+
-- PostgreSQL 12+ with pgvector extension
-- See [Requirements](#requirements) for full dependency list
+- Python 3.11
+- PostgreSQL 14+ with pgvector extension (or use the Railway DB below)
+- Node 18+ (frontend only)
 
-### Installation
+### Backend
 
 ```bash
-# Clone repository
-git clone https://github.com/kamathhrishi/stratalensai.git
-cd finance_agent
+# 1. Clone and set up
+git clone <your-repo-url>
+cd finance-agent
+python -m venv .venv
+.venv/Scripts/activate          # Windows
+# source .venv/bin/activate     # macOS/Linux
 
-# Install dependencies
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# Setup environment variables
+# 3. Configure environment
 cp .env.example .env
-# Edit .env with your API keys and database credentials
+# Fill in your keys (see Environment Variables below)
 
-# Configure environment (see Configuration section below)
+# 4. Start server
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Configuration
-
-Before running the application, configure the following in `.env`:
-
-- `BASE_URL` - Set to your server URL (e.g., `http://localhost:8000` for local, your production URL for deployed)
-- `RAG_DEBUG_MODE` - Set to `false` for production, `true` for development debugging
-- `AUTH_DISABLED` - Set to `true` to bypass Clerk auth (dev only), `false` for production
-- `CLERK_SECRET_KEY` / `CLERK_PUBLISHABLE_KEY` - Required for production authentication (get from Clerk Dashboard)
-
-Frontend env vars (read from root `.env` via `envDir: '../'` in `vite.config.ts`):
-- `VITE_CLERK_PUBLISHABLE_KEY` - Same value as `CLERK_PUBLISHABLE_KEY` (Vite requires `VITE_` prefix)
-- `VITE_API_BASE_URL` - Leave empty for same-origin requests (default); set to an explicit URL only if backend is on a separate domain
+### Frontend
 
 ```bash
-# Ingest data (optional - see agent/rag/data_ingestion/README.md)
-python agent/rag/data_ingestion/download_transcripts.py
-python agent/rag/data_ingestion/ingest_with_structure.py --ticker AAPL --year-start 2020 --year-end 2025
-
-# Run server
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+cd frontend
+npm install
+npm run dev -- --host
+# Runs on http://localhost:5173
 ```
 
-Access the application at `http://localhost:8000`
+---
 
-## Requirements
+## Environment Variables
 
-### API Keys
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string (Railway) |
+| `PG_VECTOR` | Yes | Same as DATABASE_URL (pgvector reads this) |
+| `OPENAI_API_KEY` | Yes | OpenAI fallback for LLM generation |
+| `CEREBRAS_API_KEY` | Yes | Primary LLM (Qwen-3-235B, fast + cheap) |
+| `CLERK_SECRET_KEY` | Prod | Clerk auth backend key |
+| `CLERK_PUBLISHABLE_KEY` | Prod | Clerk auth frontend key |
+| `REDIS_URL` | Optional | Redis for WebSocket session caching |
+| `TAVILY_API_KEY` | Optional | Real-time news search |
+| `LOGFIRE_TOKEN` | Optional | Pydantic Logfire observability |
+| `AUTH_DISABLED` | Dev | Set `true` to skip auth locally |
 
-| Service | Environment Variable | Required |
-|---------|---------------------|----------|
-| OpenAI | `OPENAI_API_KEY` | Yes |
-| Cerebras | `CEREBRAS_API_KEY` | Yes |
-| API Ninjas | `API_NINJAS_KEY` | Yes |
-| Clerk | `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY` | Yes (production) |
-| Tavily | `TAVILY_API_KEY` | Optional |
-| Logfire | `LOGFIRE_TOKEN` | Optional |
+---
 
-### Database
+## Testing
 
-- **PostgreSQL** with [pgvector](https://github.com/pgvector/pgvector) extension (`DATABASE_URL`)
-- **Redis** (optional, for caching) (`REDIS_URL`)
+```bash
+# Fast tests only (no LLM calls, ~5s)
+python tests/run_all.py --fast
 
-### Python Dependencies
+# Full suite including LLM streaming (2-3 min)
+python tests/run_all.py
 
-See `requirements.txt` for full list.
+# Run a single suite
+python tests/test_health.py
+python tests/test_sec_filings.py
+python tests/test_chat_rag.py
 
-## API Documentation
+# Backward-compat (same as tests/run_all.py)
+python test_apis.py --fast
+```
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+**Current results:** 19 fast tests passing · 13 LLM tests passing · 0 failing
 
-### Key Endpoints
+---
 
-- `POST /message/stream-v2` - Chat with streaming RAG responses
-- `GET /companies/search` - Search companies by ticker/name
-- `GET /transcript/{ticker}/{year}/{quarter}` - Get specific earnings transcript
-- `POST /screener/query/stream` - Natural language financial queries
+## Data Coverage
 
-## Data Sources
+| Source | Table | Rows | Tickers |
+|--------|-------|------|---------|
+| SEC 10-K filings | `ten_k_chunks` | 42,023 | 27/28 |
+| Quarterly financials (yfinance) | `transcript_chunks` | 140 | 28/28 |
 
-Data is split between PostgreSQL (embeddings, metadata) and Railway S3 (full filing documents, transcript text). See `agent/rag/data_ingestion/README.md` for detailed ingestion instructions.
+**Tickers with 10-K data:** AAPL · AMAT · AMD · AMZN · AVGO · CRM · CSCO · GOOGL · IBM · INTC · KLAC · LRCX · META · MSFT · MU · NFLX · NOW · NVDA · ORCL · PANW · PLTR · PYPL · QCOM · SNOW · TSLA · TXN · UBER
 
-## AI Agent Documentation
+**Missing:** ADBE (PDF parsing failure during ingestion)
 
-| Document | Description |
-|----------|-------------|
-| **[agent/README.md](agent/README.md)** | Complete agent architecture, pipeline stages, semantic routing, iterative self-improvement |
-| **[docs/SEC_AGENT.md](docs/SEC_AGENT.md)** | SEC 10-K agent: planning-driven retrieval, 91% accuracy on FinanceBench |
-| **[agent/rag/data_ingestion/README.md](agent/rag/data_ingestion/README.md)** | Data ingestion pipelines for transcripts and SEC filings |
+---
 
-## Development Status
+## API Endpoints
 
-**Production (Finance Agent):**
-- Earnings transcript chat with RAG
-- SEC 10-K filings (2018-2025)
-- Real-time streaming responses
-- User authentication
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Server health + DB/RAG status |
+| `GET` | `/api` | API info |
+| `POST` | `/chat/message/stream-v2` | Authenticated chat (SSE streaming) |
+| `POST` | `/chat/landing/demo/stream-v2` | Public demo chat (SSE streaming) |
+| `GET` | `/companies/companies/public/search` | Company search |
+| `GET` | `/sec-filings/sec-filings/{ticker}/available` | Available 10-K filings |
+| `GET` | `/transcripts/transcript/{ticker}/{year}/{quarter}` | Quarterly data |
+| `POST` | `/chat/conversations` | Conversation management |
 
-**In Development:**
-- Enhanced financial screener
-- Performance optimizations
+Swagger UI: `http://localhost:8000/docs`
 
-## Contributing
+### Example: RAG query
 
-Contributions welcome! Please open an issue to discuss major changes before submitting PRs.
+```bash
+curl -X POST http://localhost:8000/chat/message/stream-v2 \
+  -H "Content-Type: application/json" \
+  -H "X-User-ID: 00000000-0000-0000-0000-000000000001" \
+  -d '{"message": "What was NVIDIA total revenue in FY2025?", "use_rag": true}'
+```
+
+---
+
+## Data Ingestion
+
+### Re-ingest 10-K filings
+```bash
+# Single ticker
+.venv/Scripts/python agent/rag/data_ingestion/ingest_10k_filings_full.py \
+  --tickers ADBE --lookback-years 3
+
+# Multiple tickers
+.venv/Scripts/python agent/rag/data_ingestion/ingest_10k_filings_full.py \
+  --tickers CSCO MU QCOM TXN KLAC SNOW
+```
+
+### Re-ingest quarterly financials
+```bash
+.venv/Scripts/python agent/rag/data_ingestion/ingest_yfinance_to_transcripts.py \
+  --tickers AAPL MSFT NVDA --lookback-quarters 8
+```
+
+---
+
+## Deployment (Railway)
+
+1. Push code to GitHub
+2. Connect repo in Railway → set environment variables
+3. Railway auto-deploys on push (uses `Procfile`)
+4. The PostgreSQL database is already on Railway — no migration needed
+
+```
+# Procfile
+web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+---
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Contact
-
-For questions or access requests: hrishi@stratalens.ai
-
-
-
-
-
-
+MIT

@@ -1,67 +1,54 @@
-# Core FastAPI and web framework
+# Core
 fastapi
 uvicorn[standard]
-starlette
 
-# Database and ORM
+# Database
 asyncpg==0.30.0
 psycopg2-binary
-SQLAlchemy
+SQLAlchemy==2.0.49
 
-# Authentication and security
-# Primary: Clerk authentication (JWKS-based JWT verification)
-PyJWT[crypto]  # Required for RS256 verification with Clerk JWKS
-
-# Legacy dependencies (kept for backward compatibility during migration)
-# TODO: Remove after full Clerk migration is complete
-python-jose[cryptography]
+# Auth
+PyJWT[crypto]
 passlib[bcrypt]==1.7.4
-itsdangerous==2.1.2
-Authlib==1.2.1
-google-auth==2.23.4
-google-auth-httplib2==0.1.1
-google-auth-oauthlib==1.1.0
 
-# Data processing
+# Data
 pandas
-numpy==2.2.5
+numpy==1.26.4
 python-multipart
 python-dotenv
+scikit-learn
+duckdb
+psutil
 
-# AI and LLM
-openai
+# AI
+openai>=1.0.0,<2.0.0
 cerebras-cloud-sdk
-langchain==0.3.18
-langchain-community==0.3.17
-langchain-core==0.3.34
+langchain
+langchain-community
+langchain-core
 langchain-openai
 langchain-text-splitters==0.3.6
 sentence-transformers==3.4.1
 tiktoken==0.8.0
 datasets
 
-# Redis and caching
+# Infra
 redis==5.2.1
-
-# HTTP and networking
 requests
 httpx
-websockets==15.0.1
+websockets>=15.0.1,<16
 
-# Utilities
+# Utils
 aiofiles==24.1.0
-pydantic==2.10.6
 pydantic[email]==2.10.6
 pydantic-settings==2.7.1
-pydantic_core==2.27.2
 tavily==1.1.0
 email-validator
 
-# Development and monitoring
+# Monitoring
 tenacity==9.0.0
 logfire[fastapi]
 logfire[asyncpg]
 
-# AWS S3
+# AWS
 boto3>=1.35.0
-

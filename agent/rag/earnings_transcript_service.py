@@ -75,7 +75,7 @@ class EarningsTranscriptService:
                 from agent.llm.openai_client import OpenAILLMClient
                 self.openai_client = OpenAILLMClient(
                     api_key=openai_api_key,
-                    default_model="gpt-5-nano-2025-08-07",
+                    default_model="gpt-4o-mini",
                 )
                 self.openai_available = True
                 rag_logger.info("✅ [Transcript] OpenAI fallback client initialized (gpt-5-nano)")

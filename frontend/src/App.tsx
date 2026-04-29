@@ -6,14 +6,14 @@ import ScreenerPage from './pages/ScreenerPage'
 import CompaniesPage from './pages/CompaniesPage'
 import CompanyPage from './pages/CompanyPage'
 import PortfolioPage from './pages/PortfolioPage'
-import StrataLensLogo from './components/StrataLensLogo'
+import AppLogo from './components/AppLogo'
 
 function MobileWarningModal({ onDismiss }: { onDismiss: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-6">
       <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 flex flex-col items-center text-center gap-5">
         <div className="w-14 h-14 rounded-xl bg-[#0a1628] flex items-center justify-center">
-          <StrataLensLogo size={28} className="text-white" />
+          <AppLogo size={28} className="text-white" />
         </div>
         <div>
           <h2 className="text-xl font-semibold text-[#0a1628] mb-2">Desktop Only</h2>

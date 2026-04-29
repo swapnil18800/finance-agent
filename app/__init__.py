@@ -5,7 +5,7 @@ This module creates and configures the FastAPI application instance.
 """
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -28,8 +28,12 @@ app = FastAPI(
 
 # Instrument FastAPI with Logfire (must be done before adding routes)
 try:
-    import logfire
-    if is_logfire_active():
+    try:
+        import logfire
+    except ImportError:
+        logfire = None
+
+    if logfire and is_logfire_active():
         logfire.instrument_fastapi(app)
         from app.utils.logging_utils import log_info
         log_info("✅ FastAPI instrumented with Logfire")

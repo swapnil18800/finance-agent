@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { User, ChevronDown, ChevronUp, FileText, Newspaper, Link as LinkIcon, ExternalLink, Table, Expand, Shrink, Eye } from 'lucide-react'
-import StrataLensLogo from './StrataLensLogo'
+import AppLogo from './AppLogo'
 import { useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -482,7 +482,7 @@ export default function ChatMessage({ message, onOpenDocument }: ChatMessageProp
   const getRelevantChunks = (ticker: string, quarter: string) => {
     if (!message.sources) return []
     return message.sources
-      .filter(s => {
+      .filter((s: Source) => {
         const sourceType = getCitationType(s)
         if (sourceType !== 'transcript') return false
         const matchesTicker = s.ticker === ticker || s.company === ticker
@@ -493,7 +493,7 @@ export default function ChatMessage({ message, onOpenDocument }: ChatMessageProp
           sQuarter.replace('_', ' ') === qQuarter.replace('_', ' ')
         return matchesTicker && matchesQuarter
       })
-      .map(s => ({
+      .map((s: Source) => ({
         chunk_text: s.chunk_text || '',
         chunk_id: s.chunk_id,
         relevance_score: s.relevance_score || 0.5
@@ -576,7 +576,7 @@ export default function ChatMessage({ message, onOpenDocument }: ChatMessageProp
           {isUser ? (
             <User className="w-4 h-4 text-slate-600" />
           ) : (
-            <StrataLensLogo size={16} className="text-white" />
+            <AppLogo size={16} className="text-white" />
           )}
         </div>
 

@@ -13,18 +13,28 @@ import sys
 # Configure comprehensive logging with single file and console output
 def setup_logging():
     """Setup comprehensive logging configuration with single log file"""
+    import io
+
     # Create logs directory if it doesn't exist
     os.makedirs('logs', exist_ok=True)
-    
-    # Configure root logger with single file handler
+
+    # Force UTF-8 encoding for console output on Windows
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
+    if sys.stderr.encoding != 'utf-8':
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+    # Configure root logger with file handler
+    file_handler = logging.FileHandler('logs/stratalens.log', encoding='utf-8')
+    console_handler = logging.StreamHandler(sys.stdout)
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            # Single file handler for ALL logs
-            logging.FileHandler('logs/stratalens.log'),
-            # Console handler for immediate visibility
-            logging.StreamHandler(sys.stdout)
+            file_handler,
+            console_handler
         ],
         force=True  # Force reconfiguration
     )

@@ -18,8 +18,8 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables — override=True ensures .env wins over stale shell vars
+load_dotenv(override=True)
 
 
 @dataclass
@@ -61,7 +61,7 @@ class SecurityConfig:
 
     # Admin account defaults
     ADMIN_USERNAME: str = "admin"
-    ADMIN_EMAIL: str = "admin@stratalens.ai"
+    ADMIN_EMAIL: str = "swapnil18800@gmail.com"
     ADMIN_PASSWORD: str = "CHANGE_ME_IN_PRODUCTION"  # Must be changed via environment variable
     ADMIN_FULL_NAME: str = "System Administrator"
 
@@ -103,7 +103,7 @@ class DatabaseConfig:
     IDLE_IN_TRANSACTION_TIMEOUT_MS: int = 60000  # 1 minute
     
     # Application name
-    APPLICATION_NAME: str = "stratalens_fastapi"
+    APPLICATION_NAME: str = "alphalens_fastapi"
     
     # TCP keepalive settings
     TCP_KEEPALIVES_IDLE: int = 600
@@ -144,7 +144,7 @@ class FilePathsConfig:
     
     # Log files
     LOG_DIRECTORY: str = "logs"
-    MAIN_LOG_FILE: str = "stratalens.log"
+    MAIN_LOG_FILE: str = "alphalens.log"
 
 
 @dataclass
@@ -166,8 +166,6 @@ class ServerConfig:
     # Production domains: stratalens.ai, www.stratalens.ai, Railway deployment
     # Development: localhost and 127.0.0.1 for local development
     DEFAULT_CORS_ORIGINS: str = (
-        "https://stratalens.ai,"
-        "https://www.stratalens.ai,"
         "https://web-production-835f4.up.railway.app,"
         "http://localhost:3000,"
         "http://localhost:8000,"
@@ -234,8 +232,8 @@ class ApplicationConfig:
     """Main application configuration."""
     
     # App metadata
-    TITLE: str = "StrataLens Complete API"
-    DESCRIPTION: str = "Complete financial data analysis platform with intelligent queries, regular auth AND premium CSV onboarding"
+    TITLE: str = "AlphaLens Complete API"
+    DESCRIPTION: str = "AI-powered financial research platform"
     VERSION: str = "5.0.0"
     
     # Feature flags
@@ -370,7 +368,7 @@ class Settings:
     
     def get_database_url(self) -> str:
         """Get database URL from environment or use default."""
-        return os.getenv("DATABASE_URL", "postgresql://postgres:changeme@localhost:5432/stratalens")
+        return os.getenv("DATABASE_URL", "postgresql://postgres:changeme@localhost:5432/alphalens")
     
     def get_jwt_secret_key(self) -> str:
         """Get JWT secret key from environment or generate one."""

@@ -77,22 +77,32 @@ _MAX_MESSAGES_PER_SERVER = 100
 # Global demo tracking dictionary
 _demo_ip_tracking = {}
 
-# Create RAG system instance for chat functionality
-try:
-    rag_system = create_rag_system()
-    log_info("✅ RAG system initialized for chat router")
-except Exception as e:
-    log_error(f"❌ Failed to initialize RAG system for chat: {e}")
-    rag_system = None
+# RAG system will be lazily initialized on first use
+_rag_system_instance = None
+_rag_system_initialized = False
+
+# Module-level alias kept for backward compat; populated lazily on first endpoint call
+rag_system = None
 
 def get_chat_rag_system():
-    """Get the RAG system instance for chat functionality"""
-    if rag_system is None:
+    """Get the RAG system instance for chat functionality (lazy initialization)"""
+    global _rag_system_instance, _rag_system_initialized
+
+    if not _rag_system_initialized:
+        try:
+            _rag_system_instance = create_rag_system()
+            log_info("✅ RAG system initialized for chat router")
+        except Exception as e:
+            log_error(f"❌ Failed to initialize RAG system for chat: {e}")
+            _rag_system_instance = None
+        _rag_system_initialized = True
+
+    if _rag_system_instance is None:
         raise HTTPException(
-            status_code=503, 
-            detail="Chat features disabled - RAG system not available"
+            status_code=503,
+            detail="Chat features disabled - RAG system not available. Check backend logs."
         )
-    return rag_system
+    return _rag_system_instance
 
 def get_max_iterations() -> int:
     """Get the max iterations for agent mode.
@@ -130,14 +140,14 @@ async def stream_chat_message_v2(
     request: Request,
     chat_request: ChatMessage,
     current_user: dict = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db)
+    db=Depends(get_db_optional)
 ):
     """Stream chat message processing with step-by-step updates using POST"""
-    
+
     # Check global message limit
     check_and_increment_message_count()
-    
-    logger.info(f"✅ POST /message/stream-v2 called successfully!")
+
+    logger.info(f"✅ POST /message/stream-v2 ENDPOINT RUNNING - CODE TIMESTAMP: 2026-04-28-testing")
     logger.info(f"📦 Request body received: {chat_request}")
     
     user_id = current_user["id"]
@@ -180,49 +190,56 @@ async def stream_chat_message_v2(
             yield f"data: {json.dumps(error_event)}\n\n"
         return StreamingResponse(error_generator(), media_type="text/event-stream")
     
+    # Initialize RAG system (lazy, cached after first call)
+    global rag_system
+    try:
+        rag_system = get_chat_rag_system()
+    except HTTPException:
+        pass
+
     # Check RAG system
     if rag_system is None:
         error_event = {'type': 'error', 'message': 'Chat service unavailable'}
         async def error_generator():
             yield f"data: {json.dumps(error_event)}\n\n"
         return StreamingResponse(error_generator(), media_type="text/event-stream")
-    
-    # Get or create conversation
+
+    # Get or create conversation (skipped when DB is unavailable)
     conversation_id = None
-    if chat_request.conversation_id:
-        # Validate existing conversation
-        try:
-            conv_uuid = uuid.UUID(chat_request.conversation_id)
-            existing_conv = await db.fetchrow('''
-                SELECT id FROM chat_conversations 
-                WHERE id = $1 AND user_id = $2
-            ''', conv_uuid, uuid.UUID(user_id))
-            
-            if existing_conv:
-                conversation_id = conv_uuid
-                logger.info(f"📂 Using existing conversation: {conversation_id}")
-            else:
-                logger.warning(f"⚠️ Conversation not found, creating new")
-        except ValueError:
-            logger.warning(f"⚠️ Invalid conversation ID format, creating new")
-    
-    if not conversation_id:
-        # Create new conversation
-        title = message[:60] + ("..." if len(message) > 60 else "")
-        conversation_id = await db.fetchval('''
-            INSERT INTO chat_conversations (user_id, title)
-            VALUES ($1, $2)
+    if db is not None:
+        if chat_request.conversation_id:
+            try:
+                conv_uuid = uuid.UUID(chat_request.conversation_id)
+                existing_conv = await db.fetchrow('''
+                    SELECT id FROM chat_conversations
+                    WHERE id = $1 AND user_id = $2
+                ''', conv_uuid, uuid.UUID(user_id))
+
+                if existing_conv:
+                    conversation_id = conv_uuid
+                    logger.info(f"📂 Using existing conversation: {conversation_id}")
+                else:
+                    logger.warning(f"⚠️ Conversation not found, creating new")
+            except ValueError:
+                logger.warning(f"⚠️ Invalid conversation ID format, creating new")
+
+        if not conversation_id:
+            title = message[:60] + ("..." if len(message) > 60 else "")
+            conversation_id = await db.fetchval('''
+                INSERT INTO chat_conversations (user_id, title)
+                VALUES ($1, $2)
+                RETURNING id
+            ''', uuid.UUID(user_id), title)
+            logger.info(f"✅ Created new conversation: {conversation_id}")
+
+        user_message_id = await db.fetchval('''
+            INSERT INTO chat_messages (conversation_id, role, content)
+            VALUES ($1, 'user', $2)
             RETURNING id
-        ''', uuid.UUID(user_id), title)
-        logger.info(f"✅ Created new conversation: {conversation_id}")
-    
-    # Save user message first
-    user_message_id = await db.fetchval('''
-        INSERT INTO chat_messages (conversation_id, role, content)
-        VALUES ($1, 'user', $2)
-        RETURNING id
-    ''', conversation_id, message)
-    logger.info(f"💬 Saved user message: {user_message_id}")
+        ''', conversation_id, message)
+        logger.info(f"💬 Saved user message: {user_message_id}")
+    else:
+        logger.warning("⚠️ DB unavailable — conversation will not be persisted this session")
     
     async def event_generator():
         # STREAMING + DATABASE CONNECTION PATTERN:
@@ -309,6 +326,26 @@ async def stream_chat_message_v2(
 
                     event_type = event.get('type')
 
+                    # Convert rejected → result so the frontend always gets a final event
+                    try:
+                        if event_type == 'rejected':
+                            rejection_msg = event.get('message', 'I can only help with questions about public company financial data (earnings, revenue, filings).')
+                            event = {
+                                'type': 'result',
+                                'step': 'complete',
+                                'message': 'Response generated',
+                                'conversation_id': str(conversation_id) if conversation_id else 'unknown',
+                                'data': {
+                                    'success': True,
+                                    'response': {'answer': rejection_msg, 'citations': []},
+                                    'timing': {},
+                                    'analysis': {}
+                                }
+                            }
+                            event_type = 'result'
+                    except Exception as e:
+                        logger.error(f"Error converting rejected event: {e}", exc_info=True)
+
                     # Accumulate reasoning steps for persistence
                     if event_type in _REASONING_TYPES and event.get('message'):
                         accumulated_reasoning.append({
@@ -322,8 +359,9 @@ async def stream_chat_message_v2(
                         final_result = event.get('data')
                         query_successful = True
                         logger.info(f"✅ ROUTER: Final result event - query successful")
-                        # Inject conversation_id into the final result
-                        event['conversation_id'] = str(conversation_id)
+                        # Inject conversation_id into the final result (if not already set)
+                        if 'conversation_id' not in event:
+                            event['conversation_id'] = str(conversation_id)
                         logger.info(f"📂 Added conversation_id to result: {conversation_id}")
 
                     yield f"data: {json.dumps(event)}\n\n"
@@ -509,7 +547,14 @@ async def stream_landing_demo_message_v2(
     
     logger.info(f"🌟 Landing page demo stream from session {session_id}: {message[:100]}...")
     logger.info(f"🔄 MAX_ITERATIONS parameter received for demo: {max_iterations}")
-    
+
+    # Initialize RAG system (lazy, cached after first call)
+    global rag_system
+    try:
+        rag_system = get_chat_rag_system()
+    except HTTPException:
+        pass
+
     # Global in-memory rate limiting for demo (per session)
     global _demo_ip_tracking
     
@@ -667,19 +712,39 @@ async def stream_landing_demo_message_v2(
                                     ('omits' in reasoning_text or 'lacks' in reasoning_text or 'gaps' in reasoning_text)):
                                     event['data'][field] = ''
                     
+                    # Convert rejected → result so the frontend always gets a final event
+                    try:
+                        if event.get('type') == 'rejected':
+                            rejection_msg = event.get('message', 'I can only help with questions about public company financial data (earnings, revenue, filings).')
+                            event = {
+                                'type': 'result',
+                                'step': 'complete',
+                                'message': 'Response generated',
+                                'conversation_id': str(conversation_id) if conversation_id else 'unknown',
+                                'data': {
+                                    'success': True,
+                                    'response': {'answer': rejection_msg, 'citations': []},
+                                    'timing': {},
+                                    'analysis': {}
+                                }
+                            }
+                    except Exception as e:
+                        logger.error(f"Error converting rejected event in demo: {e}", exc_info=True)
+
                     # Log event being forwarded (skip noisy token events)
                     if event.get('type') != 'token':
                         logger.info(f"📡 DEMO ROUTER: Forwarding event to client: type={event.get('type')}, step={event.get('step')}")
-                    
+
                     # Send event
                     if event.get('type') == 'result':
                         final_result = event.get('data')
                         query_successful = True
                         logger.info(f"✅ DEMO ROUTER: Final result event - query successful")
-                        # Inject conversation_id into the final result
-                        event['conversation_id'] = str(conversation_id)
+                        # Inject conversation_id into the final result (if not already set)
+                        if 'conversation_id' not in event:
+                            event['conversation_id'] = str(conversation_id)
                         logger.info(f"📂 Added conversation_id to result: {conversation_id}")
-                    
+
                     yield f"data: {json.dumps(event)}\n\n"
                     
                     # For token events, add small delay to ensure browser receives them in real-time
@@ -1387,15 +1452,18 @@ async def get_conversation_by_id(
 async def send_message_to_conversation(
     chat_request: ChatConversationRequest,
     current_user: dict = Depends(get_current_user),
-    db: asyncpg.Connection = Depends(get_db)
+    db=Depends(get_db_optional)
 ):
     """Send message to a conversation thread (create new if conversation_id is None)"""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable — conversation history requires a database connection. Check backend logs.")
+
     # Check global message limit
     check_and_increment_message_count()
-    
+
     user_id = current_user["id"]
     is_admin = current_user.get("is_admin", False)
-    
+
     # Rate limiting (same as existing chat endpoint)
     try:
         allowed, limit_info = await rate_limiter.check_rate_limit_with_monthly(user_id, is_admin, db)
@@ -1419,13 +1487,20 @@ async def send_message_to_conversation(
             detail="Rate limit check failed. Please try again later."
         )
     
+    # Initialize RAG system (lazy, cached after first call)
+    global rag_system
+    try:
+        rag_system = get_chat_rag_system()
+    except HTTPException:
+        pass
+
     # Check if RAG system is available
     if rag_system is None:
         raise HTTPException(
-            status_code=503, 
+            status_code=503,
             detail="Chat features disabled - RAG system not available"
         )
-    
+
     # Set database connection for conversation history retrieval
     rag_system.set_database_connection(db)
     

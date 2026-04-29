@@ -31,7 +31,7 @@ class CerebrasLLMClient(LLMClient):
                 raise RuntimeError("Cerebras API key not set; set CEREBRAS_API_KEY or pass api_key")
             try:
                 from cerebras.cloud.sdk import Cerebras
-                self._client = Cerebras(api_key=self._api_key)
+                self._client = Cerebras(api_key=self._api_key, max_retries=0)
                 logger.info(f"✅ Cerebras LLM client initialized (model: {self._default_model})")
             except ImportError:
                 raise RuntimeError("Cerebras SDK not installed. Run: pip install cerebras-cloud-sdk")

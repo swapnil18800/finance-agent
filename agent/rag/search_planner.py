@@ -242,6 +242,38 @@ class SearchPlanner:
                 question_type
             )
 
+        # 4b. For tickers that have NO transcript data in the DB, automatically add 10-K
+        #      searches so those tickers always return results. This runs regardless of what
+        #      data_sources routing decided — it's a DB-state-driven safety net.
+        tickers_without_transcripts = [
+            t for t in tickers
+            if not available_data.get('quarters', {}).get(t)
+        ]
+        already_planned_10k_tickers = {s.ticker for s in ten_k_searches}
+        tickers_needing_10k_fallback = [
+            t for t in tickers_without_transcripts
+            if t not in already_planned_10k_tickers
+        ]
+        if tickers_needing_10k_fallback:
+            ten_k_fallback = self._generate_10k_searches(
+                tickers_needing_10k_fallback,
+                resolved_time.get('years', []),
+                topic,
+                question_type,
+                available_data=available_data
+            )
+            if ten_k_fallback:
+                ten_k_searches.extend(ten_k_fallback)
+                # Remove transcript searches for these tickers so the plan is accurate
+                transcript_searches = [
+                    s for s in transcript_searches
+                    if s.ticker not in {fs.ticker for fs in ten_k_fallback}
+                ]
+                rag_logger.info(
+                    f"🔄 No transcript data for {tickers_needing_10k_fallback}; "
+                    f"added {len(ten_k_fallback)} 10-K fallback searches"
+                )
+
         # 5. Generate reasoning
         reasoning = self._generate_reasoning(
             question_type,
@@ -295,18 +327,27 @@ class SearchPlanner:
         available_10k_years = {}
 
         for ticker in tickers:
-            # Get available quarters from database
             if self.database_manager:
                 try:
                     quarters = self.database_manager.get_last_n_quarters_for_company(ticker, 50)
                     available_quarters[ticker] = quarters or []
 
-                    # Extract years from quarters for 10-K availability
-                    years = list(set(int(q.split('_')[0]) for q in quarters if '_' in q))
-                    years.sort(reverse=True)
-                    available_10k_years[ticker] = years
+                    # Query ten_k_chunks directly for fiscal years (don't derive from transcript quarters
+                    # which may be empty even when 10-K data exists).
+                    try:
+                        conn = self.database_manager._get_db_connection()
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "SELECT DISTINCT fiscal_year FROM ten_k_chunks WHERE UPPER(ticker) = %s ORDER BY fiscal_year DESC",
+                            (ticker.upper(),)
+                        )
+                        rows = cursor.fetchall()
+                        self.database_manager._return_db_connection(conn)
+                        available_10k_years[ticker] = [r[0] for r in rows]
+                    except Exception as e:
+                        rag_logger.warning(f"⚠️ Could not fetch 10-K years for {ticker}: {e}")
+                        available_10k_years[ticker] = []
                 except DatabaseConnectionError:
-                    # Re-raise database connection errors - don't silently fail
                     raise
             else:
                 available_quarters[ticker] = []
@@ -604,13 +645,13 @@ Return ONLY valid JSON with this structure:
 
     def _extract_year_from_date(self, text: str) -> Optional[int]:
         """
-        Extract a 4-digit year from an explicit calendar date string.
-        Accepts formats like "July 19, 2024", "19 July 2024", "2024-07-19".
+        Extract a 4-digit year from a string.
+        Handles explicit dates ("July 19, 2024"), ISO dates, and fiscal year refs like "FY2025".
+        Uses negative lookbehind for digits so FY2025 matches but 12025 does not.
         """
         import re
 
-        # ISO-like date
-        m = re.search(r'\b(19|20)\d{2}\b', text)
+        m = re.search(r'(?<!\d)(19|20)\d{2}(?!\d)', text)
         if m:
             return int(m.group(0))
         return None
@@ -620,7 +661,9 @@ Return ONLY valid JSON with this structure:
         tickers: List[str],
         available_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Resolve 'latest' to actual latest quarter/year"""
+        """Resolve 'latest' to actual latest quarter/year.
+        Falls back to ten_k_chunks fiscal years when no transcript quarters exist.
+        """
         quarters = []
         years = []
 
@@ -631,6 +674,12 @@ Return ONLY valid JSON with this structure:
                     quarters.append(ticker_quarters[0])  # Latest quarter
                     year = int(ticker_quarters[0].split('_')[0])
                     years.append(year)
+                else:
+                    # No transcript data — fall back to latest 10-K fiscal year
+                    latest_10k = self._get_latest_10k_fiscal_year(ticker)
+                    if latest_10k:
+                        years.append(latest_10k)
+                        rag_logger.info(f"📊 No transcript quarters for {ticker}; using 10-K year {latest_10k}")
 
         return {
             'quarters': sorted(set(quarters), reverse=True),

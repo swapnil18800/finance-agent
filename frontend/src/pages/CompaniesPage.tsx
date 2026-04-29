@@ -85,7 +85,7 @@ export default function CompaniesPage() {
     try {
       const token = await getOptionalToken()
       const data = token
-        ? await searchCompanies(query, token)
+        ? await searchCompanies(query.trim())
         : await searchCompaniesPublic(query, 50)
       setResults(data.companies || [])
     } catch (err) {

@@ -6,6 +6,7 @@ import {
   fetchConversations,
   fetchConversation,
   type ChatMessage,
+  type ConversationMessage,
   type ReasoningStep,
   type Source,
   type SSEEvent,
@@ -68,7 +69,7 @@ export function useChat(): UseChatReturn {
         setCurrentConversationId(conversationId)
         // Convert backend messages to frontend format
         const messages = conversation.messages || []
-        const loadedMessages: ChatMessage[] = messages.map((msg) => {
+        const loadedMessages: ChatMessage[] = messages.map((msg: ConversationMessage) => {
           return {
             id: msg.id,
             role: msg.role as 'user' | 'assistant',

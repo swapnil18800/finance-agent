@@ -92,7 +92,7 @@ class SmartParallelSECFilingsService:
             cerebras_api_key = os.getenv("CEREBRAS_API_KEY")
             if cerebras_api_key:
                 from cerebras.cloud.sdk import Cerebras
-                self.cerebras_client = Cerebras(api_key=cerebras_api_key)
+                self.cerebras_client = Cerebras(api_key=cerebras_api_key, max_retries=0)
                 self.cerebras_available = True
                 self.cerebras_model = "qwen-3-235b-a22b-instruct-2507"
                 rag_logger.info("✅ Cerebras client initialized (Qwen 235B)")
@@ -111,7 +111,7 @@ class SmartParallelSECFilingsService:
                 from agent.llm.openai_client import OpenAILLMClient
                 self.openai_client = OpenAILLMClient(
                     api_key=openai_api_key,
-                    default_model="gpt-5-nano-2025-08-07",
+                    default_model="gpt-4o-mini",
                 )
                 self.openai_available = True
                 rag_logger.info("✅ OpenAI fallback client initialized (gpt-5-nano)")
@@ -159,35 +159,23 @@ class SmartParallelSECFilingsService:
         from cerebras.cloud.sdk import RateLimitError as CerebrasRateLimitError
         self.current_session['api_calls'] = self.current_session.get('api_calls', 0) + 1
 
-        # --- Cerebras with retries ---
+        # --- Cerebras (single attempt — fall through immediately on 429 to avoid long waits) ---
         last_error = None
         if self.cerebras_available:
-            for attempt in range(3):
-                try:
-                    response = self.cerebras_client.chat.completions.create(
-                        model=self.cerebras_model,
-                        messages=messages,
-                        temperature=temperature,
-                        max_tokens=max_tokens
-                    )
-                    return response.choices[0].message.content
-                except CerebrasRateLimitError as e:
-                    last_error = e
-                    if attempt < 2:
-                        wait_time = (attempt + 1) * 5
-                        rag_logger.warning(f"Cerebras 429 (attempt {attempt + 1}/3). Retrying in {wait_time}s...")
-                        time.sleep(wait_time)
-                    else:
-                        rag_logger.warning("Cerebras 429 after max retries — falling back to OpenAI gpt-5-nano")
-                except Exception as e:
-                    last_error = e
-                    if is_retryable_error(e) and attempt < 2:
-                        wait_time = (attempt + 1) * 2
-                        rag_logger.warning(f"Cerebras failed (attempt {attempt + 1}/3): {e}. Retrying in {wait_time}s...")
-                        time.sleep(wait_time)
-                    else:
-                        rag_logger.warning(f"Cerebras failed: {e}")
-                        break
+            try:
+                response = self.cerebras_client.chat.completions.create(
+                    model=self.cerebras_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                return response.choices[0].message.content
+            except CerebrasRateLimitError as e:
+                last_error = e
+                rag_logger.warning("Cerebras 429 — falling back to OpenAI gpt-5-nano immediately")
+            except Exception as e:
+                last_error = e
+                rag_logger.warning(f"Cerebras failed: {e}")
 
         # --- OpenAI fallback ---
         if self.openai_available:
@@ -233,35 +221,23 @@ class SmartParallelSECFilingsService:
         from cerebras.cloud.sdk import RateLimitError as CerebrasRateLimitError
         self.current_session['api_calls'] = self.current_session.get('api_calls', 0) + 1
 
-        # --- Cerebras with retries ---
+        # --- Cerebras (single attempt — fall through immediately on 429) ---
         last_error = None
         if self.cerebras_available:
-            for attempt in range(3):
-                try:
-                    response = self.cerebras_client.chat.completions.create(
-                        model=self.cerebras_model,
-                        messages=messages,
-                        temperature=temperature,
-                        max_tokens=max_tokens
-                    )
-                    return response.choices[0].message.content
-                except CerebrasRateLimitError as e:
-                    last_error = e
-                    if attempt < 2:
-                        wait_time = (attempt + 1) * 5
-                        rag_logger.warning(f"Cerebras 429 (attempt {attempt + 1}/3). Retrying in {wait_time}s...")
-                        await asyncio.sleep(wait_time)
-                    else:
-                        rag_logger.warning("Cerebras 429 after max retries — falling back to OpenAI gpt-5-nano")
-                except Exception as e:
-                    last_error = e
-                    if is_retryable_error(e) and attempt < 2:
-                        wait_time = (attempt + 1) * 2
-                        rag_logger.warning(f"Cerebras failed (attempt {attempt + 1}/3): {e}. Retrying in {wait_time}s...")
-                        await asyncio.sleep(wait_time)
-                    else:
-                        rag_logger.warning(f"Cerebras failed: {e}")
-                        break
+            try:
+                response = self.cerebras_client.chat.completions.create(
+                    model=self.cerebras_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                return response.choices[0].message.content
+            except CerebrasRateLimitError as e:
+                last_error = e
+                rag_logger.warning("Cerebras 429 — falling back to OpenAI gpt-5-nano immediately")
+            except Exception as e:
+                last_error = e
+                rag_logger.warning(f"Cerebras failed: {e}")
 
         # --- OpenAI fallback ---
         if self.openai_available:
@@ -654,7 +630,7 @@ Now analyze the original question and create the search plan."""
                 {"role": "user", "content": prompt}
             ]
 
-            response = await self._make_llm_call_async(messages, temperature=0.2, max_tokens=2000)
+            response = await self._make_llm_call_async(messages, temperature=0.2, max_tokens=4000)
 
             # Derive a keyword fallback by stripping question words
             import re as _re
@@ -801,20 +777,20 @@ Now analyze the original question and create the search plan."""
 
         # Create table summary for LLM with enhanced metadata
         table_summaries = []
-        for i, table in enumerate(all_tables[:50]):  # Limit for prompt size
+        for i, table in enumerate(all_tables[:20]):  # Limit for prompt size
             path = table.get('path_string', 'Unknown')
             sec_title = table.get('sec_section_title', '')
             content = table.get('content', '')
 
-            # Create content preview (first 150 chars, prioritize headers/first row)
-            content_preview = content[:150].replace('\n', ' ').strip()
+            # Create content preview (first 80 chars, prioritize headers/first row)
+            content_preview = content[:80].replace('\n', ' ').strip()
 
             # Build rich summary: path | section | preview
             summary_parts = [f"{i+1}. {path}"]
             if sec_title and sec_title != 'Unknown':
-                summary_parts.append(f"[Section: {sec_title}]")
+                summary_parts.append(f"[{sec_title}]")
             if content_preview:
-                summary_parts.append(f"[Preview: {content_preview}...]")
+                summary_parts.append(f"[{content_preview}]")
 
             table_summaries.append(" | ".join(summary_parts))
 
@@ -833,7 +809,7 @@ Return JSON with table indices (1-indexed), selecting up to {top_k} tables:
                 {"role": "user", "content": prompt}
             ]
 
-            response = self._make_llm_call(messages, temperature=0.1, max_tokens=500)
+            response = self._make_llm_call(messages, temperature=0.1, max_tokens=2000)
             result = self._parse_json_with_retry(response, default_result={'selected_tables': [1, 2]})
 
             selected_indices = result.get('selected_tables', [1, 2])
@@ -1008,7 +984,7 @@ IMPORTANT: Select 1-3 sections maximum. Be selective."""
                 {"role": "user", "content": prompt}
             ]
 
-            response = self._make_llm_call(messages, temperature=0.1, max_tokens=500)
+            response = self._make_llm_call(messages, temperature=0.1, max_tokens=2000)
             result = self._parse_json_with_retry(response, default_result={'selected_sections': []})
 
             selected_indices = result.get('selected_sections', [])

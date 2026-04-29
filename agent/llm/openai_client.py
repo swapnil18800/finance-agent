@@ -17,7 +17,7 @@ class OpenAILLMClient(LLMClient):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        default_model: str = "gpt-5-nano-2025-08-07",
+        default_model: str = "gpt-4o-mini",
         default_temperature: float = 1,
         default_max_tokens: int = 8000,
     ):
